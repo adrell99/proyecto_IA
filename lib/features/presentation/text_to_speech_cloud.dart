@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:interacting_tom/features/data/google_cloud_repository.dart';
 import 'package:interacting_tom/features/providers/animation_state_controller.dart';
-import 'package:interacting_tom/features/providers/openai_response_controller.dart';
+import 'package:interacting_tom/features/providers/AIResponseController.dart';
 import 'package:just_audio/just_audio.dart';
 
 class TextToSpeechCloud extends ConsumerStatefulWidget {
