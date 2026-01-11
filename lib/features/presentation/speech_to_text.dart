@@ -1,12 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import 'package:interacting_tom/features/providers/animation_state_controller.dart';
-import 'package:interacting_tom/features/providers/AIResponseController.dart'; // Corrige este path si es necesario
+import 'package:interacting_tom/features/providers/AIResponseController.dart'; // Asegúrate de que el path sea correcto
 
 class SpeechToTextWidget extends ConsumerStatefulWidget {
   const SpeechToTextWidget({super.key, this.child});
@@ -22,7 +20,6 @@ class _SpeechToTextState extends ConsumerState<SpeechToTextWidget> {
   bool _speechEnabled = false;
   bool _isListening = false;
   String _lastWords = '';
-  String _lastError = '';
 
   @override
   void initState() {
@@ -41,16 +38,9 @@ class _SpeechToTextState extends ConsumerState<SpeechToTextWidget> {
         },
         onError: (error) {
           debugPrint('Speech error: $error');
-          setState(() {
-            _lastError =
-                '${error.errorMsg} - ${error.permanent ? 'permanent' : ''}';
-            _isListening = false;
-          });
+          setState(() => _isListening = false);
         },
       );
-      if (_speechEnabled) {
-        debugPrint('Speech initialized successfully');
-      }
       setState(() {});
     } catch (e) {
       debugPrint('Initialization error: $e');
@@ -58,10 +48,7 @@ class _SpeechToTextState extends ConsumerState<SpeechToTextWidget> {
   }
 
   void _startListening() async {
-    if (!_speechEnabled) {
-      debugPrint('Speech not enabled');
-      return;
-    }
+    if (!_speechEnabled) return;
 
     await _speech.listen(
       onResult: _onSpeechResult,
@@ -70,28 +57,32 @@ class _SpeechToTextState extends ConsumerState<SpeechToTextWidget> {
       localeId: ref.read(animationStateControllerProvider).language == 'en'
           ? 'en_US'
           : 'ja_JP',
-      cancelOnError: false,
-      partialResults: true,
+      listenOptions: SpeechListenOptions(
+        cancelOnError: false,
+        partialResults: true,
+      ),
       onSoundLevelChange: (level) {
-        // Puedes usar esto para animar el oso si quieres
+        // Aquí puedes usar el level para animar el volumen si quieres
       },
     );
 
     setState(() => _isListening = true);
-    updateListeningAnimation(true);
+    _updateListeningAnimation(true);
   }
 
   void _stopListening() async {
     await _speech.stop();
     setState(() => _isListening = false);
-    updateListeningAnimation(false);
+    _updateListeningAnimation(false);
 
-    // Aquí enviamos el texto reconocido al provider de OpenAI
     if (_lastWords.isNotEmpty) {
-      ref.read(openAIResponseControllerProvider.notifier).state =
-          _lastWords; // Si es StateProvider
-      // O si es AsyncNotifierProvider: ref.read(openAIResponseControllerProvider.notifier).processText(_lastWords);
-      debugPrint('Sent to AI: $_lastWords');
+      // Envía el texto al provider de AI
+      // Ajusta el nombre del método según tu AIResponseController (ej: generateResponse, sendMessage, processText, etc.)
+      ref
+          .read(aiResponseControllerProvider.notifier)
+          .generateResponse(_lastWords);
+      _lastWords = '';
+      debugPrint('Texto enviado a IA: $_lastWords');
     }
   }
 
@@ -105,23 +96,26 @@ class _SpeechToTextState extends ConsumerState<SpeechToTextWidget> {
     }
   }
 
-  void updateListeningAnimation(bool isListening) {
+  void _updateListeningAnimation(bool isListening) {
+    // Ajusta el nombre del método según tu AnimationStateController
+    // Ejemplos comunes: updateIsListening, setListening, changeListening, updateListening
+    // Si no existe ninguno, abre animation_state_controller.dart y agrega:
+    // void updateIsListening(bool value) => state = state.copyWith(isListening: value);
     ref
         .read(animationStateControllerProvider.notifier)
-        .updateListening(isListening);
-    // Si tienes updateTalking o similar, úsalo aquí también
+        .updateIsListening(isListening);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Escucha cambios en el provider si necesitas reaccionar a respuestas AI
+    // Escucha la respuesta de la IA (asumiendo que aiResponseControllerProvider es AsyncNotifierProvider<String?> o similar)
     ref.listen<AsyncValue<String?>>(
-      openAIResponseControllerProvider,
+      aiResponseControllerProvider,
       (previous, next) {
-        next.whenData((data) {
-          if (data != null && data.isNotEmpty) {
-            debugPrint('AI response received: $data');
-            // Aquí podrías mostrar la respuesta o algo
+        next.whenData((response) {
+          if (response != null && response.isNotEmpty) {
+            debugPrint('Respuesta de IA recibida: $response');
+            // Aquí puedes reproducir la respuesta con TTS o mostrarla
           }
         });
       },

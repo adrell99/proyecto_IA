@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // Para debugPrint
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,8 +9,7 @@ class AnimationScreen extends ConsumerStatefulWidget {
   const AnimationScreen({super.key});
 
   @override
-  ConsumerState<ConsumerStatefulWidget> createState() =>
-      _AnimationScreenState();
+  ConsumerState<AnimationScreen> createState() => _AnimationScreenState();
 }
 
 class _AnimationScreenState extends ConsumerState<AnimationScreen> {
@@ -19,7 +19,7 @@ class _AnimationScreenState extends ConsumerState<AnimationScreen> {
 
   @override
   void initState() {
-    print('animation screen init state');
+    debugPrint('animation screen init state');
     super.initState();
 
     rootBundle.load('assets/bear_character.riv').then(
@@ -33,40 +33,39 @@ class _AnimationScreenState extends ConsumerState<AnimationScreen> {
             artboard.addController(controller);
             isHearing = controller.findSMI('Hear');
             talk = controller.findSMI('Talk');
-            setState(
-              () {
-                riveArtboard = artboard;
-              },
-            );
+            setState(() {
+              riveArtboard = artboard;
+            });
           }
         } catch (e) {
-          print(e);
+          debugPrint('Error loading Rive file: $e');
         }
       },
     );
   }
 
   void _toggleAnimation(AnimationState newValue) {
-    print('toggle animation, is hearing: ${newValue.isHearing}');
+    debugPrint('toggle animation, is hearing: ${newValue.isHearing}');
     isHearing?.value = newValue.isHearing;
     talk?.value = newValue.isTalking;
   }
 
-  bool get isHearingValue => isHearing?.value ?? false;
-
   @override
   Widget build(BuildContext context) {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
     final animState = ref.watch(animationStateControllerProvider);
-    print('Built animation screen');
+    debugPrint('Built animation screen');
     _toggleAnimation(animState);
+
     return Center(
-        child: riveArtboard == null
-            ? const SizedBox()
-            : Rive(
-                artboard: riveArtboard!,
-                alignment: Alignment.bottomCenter,
-                // fit: BoxFit.cover,
-              ));
+      child: riveArtboard == null
+          ? const SizedBox()
+          : Rive(
+              artboard: riveArtboard!,
+              alignment: Alignment.bottomCenter,
+              // fit: BoxFit.cover,
+            ),
+    );
   }
 }

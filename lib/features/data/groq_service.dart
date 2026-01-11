@@ -1,32 +1,32 @@
 import 'package:openai_dart/openai_dart.dart';
 
-class XaiService {
+class GroqService {
   final String apiKey =
-      const String.fromEnvironment('XAI_API_KEY', defaultValue: '');
+      const String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
 
-  XaiService() {
+  GroqService() {
     if (apiKey.isEmpty) {
       throw Exception(
-          'Falta XAI_API_KEY. Ejecuta con --dart-define=XAI_API_KEY=tu_clave');
+          'Falta GROQ_API_KEY. Ejecuta con --dart-define=GROQ_API_KEY=tu_clave');
     }
   }
 
   Future<String> getResponse(String userPrompt) async {
     final client = OpenAIClient(
       apiKey: apiKey,
-      baseUrl: 'https://api.x.ai/v1',
+      baseUrl: 'https://api.groq.com/openai/v1',
     );
 
     try {
       final response = await client.createChatCompletion(
         request: CreateChatCompletionRequest(
-          model: ChatCompletionModel.modelId(
-              'grok-beta'), // o el modelo actual de xAI
+          model: const ChatCompletionModel.modelId(
+              'llama-3.1-70b-versatile'), // Modelo rápido y bueno de Groq (puedes cambiarlo)
           messages: [
-            // Developer/system message - sin 'const' + wrapper .text()
+            // System prompt - sin 'const' + wrapper .text()
             ChatCompletionMessage.developer(
               content: ChatCompletionDeveloperMessageContent.text(
-                'Eres un oso polar muy divertido, sarcástico y amigable con niños.',
+                'Eres un oso polar simpático, juguetón y educativo que habla con niños. Responde corto, divertido y amigable.',
               ),
             ),
 
@@ -35,18 +35,17 @@ class XaiService {
               content: ChatCompletionUserMessageContent.string(userPrompt),
             ),
           ],
-          temperature: 1.0,
-          maxCompletionTokens: 400,
+          temperature: 0.9,
+          maxCompletionTokens: 350,
         ),
       );
 
-      // Acceso seguro para evitar null errors
       final content = response.choices.firstOrNull?.message.content?.trim() ??
-          '¡Ay no! Grok se quedó pensando... 😅';
+          '¡Ups! El oso se quedó congelado ❄️';
 
       return content;
     } catch (e) {
-      return '¡Error con xAI! El oso está en modo siesta ($e)';
+      return '¡Error con Groq! El oso se tropezó con un iceberg ($e)';
     }
   }
 }

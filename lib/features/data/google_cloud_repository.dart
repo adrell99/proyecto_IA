@@ -1,57 +1,61 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:interacting_tom/utils/text_to_speech_api.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:http/http.dart' as http;
+import 'package:interacting_tom/env/env.dart'; // Para la key de Google Cloud
 
-part 'google_cloud_repository.g.dart';
+/// Provider que sintetiza texto a audio usando Google Cloud Text-to-Speech directamente
+final synthesizeTextFutureProvider =
+    FutureProvider.family<Uint8List, (String text, String languageCode)>(
+  (ref, params) async {
+    final text = params.$1;
+    final languageCode = params.$2;
 
-class GoogleCloudRepository {
-  final TextToSpeechAPI ttsAPI;
+    if (text.trim().isEmpty) {
+      throw Exception('Texto vacío para TTS');
+    }
 
-  GoogleCloudRepository(this.ttsAPI);
+    final apiKey = Env
+        .googleCloudApiKey; // Asegúrate de que este getter exista en env.dart
 
-  Future<List<Voice>> getVoices() {
-    return ttsAPI.getVoices();
-  }
+    if (apiKey.isEmpty) {
+      throw Exception('Google Cloud API Key no configurada');
+    }
 
-  Future<ByteAudioSource> synthesizeText(String text, String lang) async {
-    final audioBytes = await ttsAPI.synthesizeText(text, lang);
-    return ByteAudioSource(audioBytes);
-  }
-}
+    final url = Uri.parse(
+        'https://texttospeech.googleapis.com/v1/text:synthesize?key=$apiKey');
 
-class ByteAudioSource extends StreamAudioSource {
-  final List<int> bytes;
-  ByteAudioSource(this.bytes);
+    // Voz simpática para niños
+    final voiceName = languageCode.startsWith('en')
+        ? 'en-US-Wavenet-C' // Voz masculina amigable
+        : 'ja-JP-Wavenet-A'; // Voz femenina (ajusta si tu app usa otros idiomas)
 
-  @override
-  Future<StreamAudioResponse> request([int? start, int? end]) async {
-    start ??= 0;
-    end ??= bytes.length;
-    return StreamAudioResponse(
-      sourceLength: bytes.length,
-      contentLength: end - start,
-      offset: start,
-      stream: Stream.value(bytes.sublist(start, end)),
-      contentType: 'audio/mpeg',
+    final body = jsonEncode({
+      'input': {'text': text},
+      'voice': {
+        'languageCode': languageCode,
+        'name': voiceName,
+      },
+      'audioConfig': {
+        'audioEncoding': 'MP3',
+        'speakingRate': 0.9,
+        'pitch': 1.5,
+      },
+    });
+
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: body,
     );
-  }
-}
 
-@Riverpod(keepAlive: true)
-GoogleCloudRepository googleCloudRepository(Ref ref) {
-  return GoogleCloudRepository(TextToSpeechAPI());
-}
-
-@riverpod
-Future<List<Voice>> voicesFuture(Ref ref) {
-  final googleCloudRepository = ref.read(googleCloudRepositoryProvider);
-  return googleCloudRepository.getVoices();
-}
-
-@riverpod
-Future<ByteAudioSource> synthesizeTextFuture(
-    Ref ref, String text, String lang) {
-  final googleCloudRepository = ref.read(googleCloudRepositoryProvider);
-  return googleCloudRepository.synthesizeText(text, lang);
-}
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      final String audioContent = json['audioContent'];
+      return base64Decode(audioContent);
+    } else {
+      throw Exception('Error TTS: ${response.statusCode} - ${response.body}');
+    }
+  },
+);

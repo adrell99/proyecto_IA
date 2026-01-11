@@ -21,12 +21,12 @@ class XaiService {
       final response = await client.createChatCompletion(
         request: CreateChatCompletionRequest(
           model: const ChatCompletionModel.modelId(
-              'grok-beta'), // o el modelo actual de xAI
+              'grok-beta'), // o el modelo actual de xAI (grok-beta o grok-2 según disponibilidad)
           messages: [
-            // Developer/system message - sin 'const' + wrapper .text()
-            const ChatCompletionMessage.developer(
+            // System prompt - wrapper .text()
+            ChatCompletionMessage.developer(
               content: ChatCompletionDeveloperMessageContent.text(
-                'Eres un oso polar muy divertido, sarcástico y amigable con niños.',
+                'Eres un oso polar muy divertido, sarcástico, ingenioso y amigable con niños. Responde de forma corta, creativa y con humor.',
               ),
             ),
 
@@ -40,13 +40,12 @@ class XaiService {
         ),
       );
 
-      // Acceso seguro
       final content = response.choices.firstOrNull?.message.content?.trim() ??
-          '¡Ay no! Grok se quedó pensando... 😅';
+          '¡Ay no! Grok se quedó pensando en el espacio... 😅';
 
       return content;
     } catch (e) {
-      return '¡Error con xAI! El oso está en modo siesta ($e)';
+      return '¡Error con xAI! El oso está explorando el universo ($e)';
     }
   }
 }

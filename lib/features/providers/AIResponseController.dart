@@ -10,31 +10,31 @@ part 'AIResponseController.g.dart';
 enum AiProvider { groq, xai }
 
 // Provider para seleccionar qué IA usar (Groq o xAI)
-final aiProvider = StateProvider<AiProvider>((ref) => AiProvider.groq);
+final selectedAiProvider = StateProvider<AiProvider>((ref) => AiProvider.groq);
 
-@Riverpod(
-    keepAlive: true) // keepAlive: true → no se destruye al cambiar de pantalla
+// Providers para los servicios (instancias singleton)
+final groqServiceProvider = Provider<GroqService>((ref) => GroqService());
+
+final xaiServiceProvider = Provider<XaiService>((ref) => XaiService());
+
+@Riverpod(keepAlive: true)
 class AiResponseController extends _$AiResponseController {
   @override
   AsyncValue<String?> build() {
-    // Estado inicial: null (sin respuesta aún)
     return const AsyncData(null);
   }
 
-  /// Obtiene una respuesta completa (no streaming)
   Future<void> getResponse(String prompt) async {
     state = const AsyncLoading();
 
-    final provider = ref.read(aiProvider);
+    final provider = ref.read(selectedAiProvider);
 
     try {
       String answer;
       if (provider == AiProvider.groq) {
-        final groqService = ref.read(groqServiceProvider);
-        answer = await groqService.getResponse(prompt);
+        answer = await ref.read(groqServiceProvider).getResponse(prompt);
       } else {
-        final xaiService = ref.read(xaiServiceProvider);
-        answer = await xaiService.getResponse(prompt);
+        answer = await ref.read(xaiServiceProvider).getResponse(prompt);
       }
 
       state = AsyncData(answer);
@@ -43,11 +43,10 @@ class AiResponseController extends _$AiResponseController {
     }
   }
 
-  /// Versión con streaming (ideal para animar al oso hablando mientras responde)
   void streamResponse(String prompt) {
     state = const AsyncLoading();
 
-    final provider = ref.read(aiProvider);
+    final provider = ref.read(selectedAiProvider);
     Stream<String> stream;
 
     if (provider == AiProvider.groq) {
@@ -56,24 +55,23 @@ class AiResponseController extends _$AiResponseController {
       stream = ref.read(xaiServiceProvider).streamResponse(prompt);
     }
 
-    // Escuchamos cada chunk y vamos acumulando la respuesta
     stream.listen(
       (chunk) {
-        // Actualizamos el estado concatenando el nuevo fragmento
         final current = state.value ?? '';
         state = AsyncData(current + chunk);
       },
       onError: (e, stack) {
         state = AsyncError(e, stack);
       },
-      onDone: () {
-        // Opcional: puedes hacer algo cuando termine el stream
-      },
     );
   }
 
-  // Método útil para limpiar la respuesta actual si lo necesitas
   void clearResponse() {
     state = const AsyncData(null);
+  }
+
+  // Método de compatibilidad (para speech_to_text)
+  Future<void> generateResponse(String text) async {
+    await getResponse(text);
   }
 }
