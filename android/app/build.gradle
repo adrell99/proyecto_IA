@@ -1,7 +1,7 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    id "dev.flutter.flutter-gradle-plugin"  // ← Esto reemplaza el apply viejo y soluciona el error
+    id "dev.flutter.flutter-gradle-plugin"
 }
 
 def localProperties = new Properties()
@@ -50,7 +50,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug  // Cambia a tu signing config real en producción
+            signingConfig signingConfigs.debug
         }
     }
 }
