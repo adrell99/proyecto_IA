@@ -1,76 +1,72 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:interacting_tom/features/presentation/animation_screen.dart';
-import 'package:interacting_tom/features/presentation/speech_to_text.dart';
-import 'package:interacting_tom/features/presentation/text_to_speech_cloud.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rive/rive.dart'; // Si usas Rive para el oso
 
-class HomeScreen extends StatefulWidget {
+// Importa tus widgets
+import 'package:interacting_tom/features/presentation/text_to_speech_local.dart';
+import 'package:interacting_tom/features/presentation/speech_to_text.dart'; // Este import ahora se usa → adiós unused_import
+
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  String _version = '';
-
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _getAppVersion();
-  }
-
-  Future<void> _getAppVersion() async {
-    try {
-      final PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      setState(() {
-        _version = 'v${packageInfo.version}+${packageInfo.buildNumber}';
-      });
-    } catch (e) {
-      setState(() {
-        _version = 'v1.0.0+1'; // fallback version
-      });
-    }
+    // Inicializaciones si las tienes
   }
 
   @override
   Widget build(BuildContext context) {
-    print('home screen built');
+    debugPrint('Building Home Screen'); // Cambiado de print
+
     return Scaffold(
-      body: Stack(
-        children: [
-          TextToSpeechCloud(
-            child: AnimationScreen(),
-          ),
-          // Version display in bottom-left corner
-          Positioned(
-            bottom: 16,
-            left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                _version,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
+      backgroundColor: Colors.lightBlue[50],
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Fondo o animación Rive del oso (ejemplo)
+            const Center(
+              child: RiveAnimation.asset(
+                'assets/animations/bear.riv', // Ajusta tu archivo Rive
+                fit: BoxFit.contain,
               ),
             ),
-          ),
-        ],
-      ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Center(child: STTWidget()),
-        ],
+
+            // Widget de Speech-to-Text (el micrófono interactivo)
+            Positioned(
+              bottom: 40,
+              left: 0,
+              right: 0,
+              child: const Center(
+                child: SpeechToTextWidget(), // ← Aquí estaba el error: usa el nombre correcto
+              ),
+            ),
+
+            // Widget TTS (si lo tienes en overlay o algo)
+            const TextToSpeechLocal(
+              child: SizedBox.shrink(), // O tu child
+            ),
+
+            // Ejemplo de botón con color corregido (sin withOpacity deprecated)
+            Positioned(
+              top: 20,
+              right: 20,
+              child: FloatingActionButton(
+                backgroundColor: Colors.purple.withValues(alpha: 0.7), // ← Fix deprecado
+                onPressed: () {
+                  // Tu lógica
+                },
+                child: const Icon(Icons.settings),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,336 +1,153 @@
-import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:interacting_tom/features/providers/AIResponseController.dart';
-import 'package:interacting_tom/features/providers/animation_state_controller.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
-import 'package:collection/collection.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-class STTWidget extends ConsumerStatefulWidget {
-  const STTWidget({super.key});
+import 'package:interacting_tom/features/providers/animation_state_controller.dart';
+import 'package:interacting_tom/features/providers/AIResponseController.dart'; // Corrige este path si es necesario
+
+class SpeechToTextWidget extends ConsumerStatefulWidget {
+  const SpeechToTextWidget({super.key, this.child});
+
+  final Widget? child;
 
   @override
-  ConsumerState<STTWidget> createState() => _STTWidgetState();
+  ConsumerState<SpeechToTextWidget> createState() => _SpeechToTextState();
 }
 
-class _STTWidgetState extends ConsumerState<STTWidget>
-    with TickerProviderStateMixin {
-  final SpeechToText _speechToText = SpeechToText();
+class _SpeechToTextState extends ConsumerState<SpeechToTextWidget> {
+  final SpeechToText _speech = SpeechToText();
+  bool _speechEnabled = false;
+  bool _isListening = false;
   String _lastWords = '';
-  List<LocaleName> _localeNames = [];
-  late AnimationController _idleAnimationController;
-  late Animation<double> _idleAnimation;
-  bool _isWaitingForResponse = false;
-  bool _hasPermission = true; // Track permission status
-  Timer? _responseTimeout;
+  String _lastError = '';
+
   @override
   void initState() {
     super.initState();
     _initSpeech();
-    _checkInitialPermissionStatus();
-
-    // Idle animation (gentle movement when not active)
-    _idleAnimationController = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    );
-    _idleAnimation = Tween<double>(
-      begin: 0.0,
-      end: 10.0,
-    ).animate(CurvedAnimation(
-      parent: _idleAnimationController,
-      curve: Curves.easeInOut,
-    ));
-    _idleAnimationController.repeat(reverse: true);
   }
 
-  /// Check initial permission status without requesting
-  void _checkInitialPermissionStatus() async {
-    var status = await Permission.microphone.status;
+  Future<void> _initSpeech() async {
+    try {
+      _speechEnabled = await _speech.initialize(
+        onStatus: (status) {
+          debugPrint('Speech status: $status');
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (error) {
+          debugPrint('Speech error: $error');
+          setState(() {
+            _lastError =
+                '${error.errorMsg} - ${error.permanent ? 'permanent' : ''}';
+            _isListening = false;
+          });
+        },
+      );
+      if (_speechEnabled) {
+        debugPrint('Speech initialized successfully');
+      }
+      setState(() {});
+    } catch (e) {
+      debugPrint('Initialization error: $e');
+    }
+  }
+
+  void _startListening() async {
+    if (!_speechEnabled) {
+      debugPrint('Speech not enabled');
+      return;
+    }
+
+    await _speech.listen(
+      onResult: _onSpeechResult,
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 5),
+      localeId: ref.read(animationStateControllerProvider).language == 'en'
+          ? 'en_US'
+          : 'ja_JP',
+      cancelOnError: false,
+      partialResults: true,
+      onSoundLevelChange: (level) {
+        // Puedes usar esto para animar el oso si quieres
+      },
+    );
+
+    setState(() => _isListening = true);
+    updateListeningAnimation(true);
+  }
+
+  void _stopListening() async {
+    await _speech.stop();
+    setState(() => _isListening = false);
+    updateListeningAnimation(false);
+
+    // Aquí enviamos el texto reconocido al provider de OpenAI
+    if (_lastWords.isNotEmpty) {
+      ref.read(openAIResponseControllerProvider.notifier).state =
+          _lastWords; // Si es StateProvider
+      // O si es AsyncNotifierProvider: ref.read(openAIResponseControllerProvider.notifier).processText(_lastWords);
+      debugPrint('Sent to AI: $_lastWords');
+    }
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
     setState(() {
-      _hasPermission = status.isGranted;
+      _lastWords = result.recognizedWords;
     });
+
+    if (result.finalResult) {
+      _stopListening();
+    }
+  }
+
+  void updateListeningAnimation(bool isListening) {
+    ref
+        .read(animationStateControllerProvider.notifier)
+        .updateListening(isListening);
+    // Si tienes updateTalking o similar, úsalo aquí también
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Escucha cambios en el provider si necesitas reaccionar a respuestas AI
+    ref.listen<AsyncValue<String?>>(
+      openAIResponseControllerProvider,
+      (previous, next) {
+        next.whenData((data) {
+          if (data != null && data.isNotEmpty) {
+            debugPrint('AI response received: $data');
+            // Aquí podrías mostrar la respuesta o algo
+          }
+        });
+      },
+    );
+
+    return GestureDetector(
+      onTap: _isListening ? _stopListening : _startListening,
+      child: widget.child ??
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _isListening ? Colors.redAccent : Colors.blueAccent,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _isListening ? Icons.mic : Icons.mic_none,
+              color: Colors.white,
+              size: 40,
+            ),
+          ),
+    );
   }
 
   @override
   void dispose() {
-    _idleAnimationController.dispose();
-    _responseTimeout?.cancel();
+    _speech.cancel();
     super.dispose();
-  }
-
-  void errorListener(SpeechRecognitionError error) {
-    print(
-        'Received error status: $error, listening: ${_speechToText.isListening}');
-    ref.read(animationStateControllerProvider.notifier).updateHearing(false);
-  }
-
-  void statusListener(String status) {
-    if (status == 'done') {
-      ref.read(animationStateControllerProvider.notifier).updateHearing(false);
-    }
-    print(
-        'Received listener status: $status, listening: ${_speechToText.isListening}');
-  }
-
-  /// This has to happen only once per app
-  void _initSpeech() async {
-    await _speechToText.initialize(
-        onError: errorListener, onStatus: statusListener);
-    _localeNames = await _speechToText.locales();
-  }
-
-  /// Check and request microphone permission
-  Future<bool> _checkMicrophonePermission() async {
-    var status = await Permission.microphone.status;
-
-    if (status.isDenied) {
-      // Request permission
-      status = await Permission.microphone.request();
-    }
-
-    if (status.isPermanentlyDenied) {
-      // Show dialog to open app settings
-      setState(() {
-        _hasPermission = false;
-      });
-      await _showPermissionDialog();
-      return false;
-    }
-
-    bool granted = status.isGranted;
-    setState(() {
-      _hasPermission = granted;
-    });
-
-    return granted;
-  }
-
-  Future<void> _showPermissionDialog() async {
-    if (!mounted) return;
-
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Microphone Permission Required'),
-          content: const Text(
-            'This app needs microphone access to listen to your voice. '
-            'Please enable microphone permission in your device settings.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('Open Settings'),
-              onPressed: () {
-                Navigator.of(context).pop();
-                openAppSettings();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Each time to start a speech recognition session
-  void _startListening() async {
-    if (_speechToText.isListening) {
-      print('Already listening');
-      return;
-    }
-
-    // Check microphone permission before starting
-    bool hasPermission = await _checkMicrophonePermission();
-    if (!hasPermission) {
-      print('Microphone permission denied');
-      return;
-    }
-
-    ref.read(animationStateControllerProvider.notifier).updateHearing(true);
-    final localeId = _getCurrentLocale();
-    await _speechToText.listen(onResult: _onSpeechResult, localeId: localeId);
-
-    setState(() {});
-  }
-
-  String _getCurrentLocale() {
-    final String currentLang =
-        ref.read(animationStateControllerProvider).language;
-
-    final locale = _localeNames.firstWhereOrNull(
-        (locale) => locale.localeId.contains(currentLang.toUpperCase()));
-    if (locale == null || _localeNames.isEmpty) {
-      return currentLang == 'en' ? 'en-US' : 'ja-JP';
-    } else {
-      return locale.localeId;
-    }
-  }
-
-  /// Manually stop the active speech recognition session
-  /// Note that there are also timeouts that each platform enforces
-  /// and the SpeechToText plugin supports setting timeouts on the
-  /// listen method.
-  void _stopListening() async {
-    // Start waiting for response with timeout
-    _startWaitingForResponse();
-    await _speechToText.stop();
-    ref.read(animationStateControllerProvider.notifier).updateHearing(false);
-  }
-
-  void _startWaitingForResponse() {
-    setState(() {
-      _isWaitingForResponse = true;
-    });
-
-    // Start timeout timer (10 seconds)
-    _responseTimeout?.cancel();
-    _responseTimeout = Timer(const Duration(seconds: 10), () {
-      print('OpenAI response timeout - stopping wait');
-      _stopWaitingForResponse();
-    });
-  }
-
-  void _stopWaitingForResponse() {
-    _responseTimeout?.cancel();
-    if (_isWaitingForResponse) {
-      setState(() {
-        _isWaitingForResponse = false;
-      });
-    }
-  }
-
-  /// This is the callback that the SpeechToText plugin calls when
-  /// the platform returns recognized words.
-  void _onSpeechResult(SpeechRecognitionResult result) async {
-    if (result.finalResult) {
-      _lastWords = result.recognizedWords;
-      _stopListening();
-
-      ref
-          .read(openAIResponseControllerProvider.notifier)
-          .getResponse(_lastWords);
-    }
-  }
-
-  bool get _isListening => _speechToText.isListening;
-
-  @override
-  Widget build(BuildContext context) {
-    print('Built STT widget');
-    print("IS LISTENING: $_isListening");
-
-    // Listen to OpenAI response to stop waiting when response received
-    ref.listen(openAIResponseControllerProvider, (previous, next) {
-      if (_isWaitingForResponse) {
-        next.when(
-          data: (data) {
-            if (data != null) {
-              _stopWaitingForResponse();
-            }
-          },
-          error: (error, stackTrace) {
-            _stopWaitingForResponse();
-          },
-          loading: () {}, // Keep waiting during loading
-        );
-      }
-    });
-
-    final bool isIdle = !_isListening && !_isWaitingForResponse;
-    final bool isDisabled = _isWaitingForResponse;
-
-    return AnimatedBuilder(
-      animation: _idleAnimation,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, isIdle ? _idleAnimation.value : 0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: InkWell(
-              onTap: isDisabled
-                  ? null
-                  : () {
-                      print("IS LISTENING: $_isListening");
-                      _isListening ? _stopListening() : _startListening();
-                    },
-              borderRadius: BorderRadius.circular(30),
-              child: Semantics(
-                label: _getSemanticLabel(),
-                button: true,
-                enabled: !isDisabled,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _getIconData(),
-                      color: _getIconColor(),
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _getDisplayText(),
-                      style: TextStyle(
-                        color: _getIconColor(),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  IconData _getIconData() {
-    if (_isWaitingForResponse) return Icons.hourglass_empty;
-    if (!_hasPermission) return Icons.warning;
-    return _isListening ? Icons.mic : Icons.mic_off;
-  }
-
-  Color _getIconColor() {
-    if (_isWaitingForResponse) return Colors.orange;
-    if (!_hasPermission) return Colors.red;
-    if (_isListening) return Colors.red;
-    return Colors.grey[600]!;
-  }
-
-  String _getDisplayText() {
-    if (_isWaitingForResponse) return 'THINKING...';
-    if (_isListening) return 'LISTENING...';
-    if (!_hasPermission) return 'NEED MIC PERMISSION';
-    return 'TAP TO SPEAK';
-  }
-
-  String _getSemanticLabel() {
-    if (_isWaitingForResponse) return 'Waiting for response, please wait';
-    if (_isListening) return 'Currently listening, tap to stop';
-    if (!_hasPermission)
-      return 'Microphone permission required, tap to grant permission';
-    return 'Tap to start speaking';
   }
 }

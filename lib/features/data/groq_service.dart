@@ -1,57 +1,40 @@
 import 'package:groq/groq.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// Provider para GroqService (Riverpod)
-final groqServiceProvider = Provider<GroqService>((ref) {
-  final groq = Groq(
-    apiKey: const String.fromEnvironment(
-        'groqApiKey'), // Obligatorio: flutter run --dart-define=groqApiKey=tu-clave
-    configuration: const Configuration(
-      model:
-          'llama-3.3-70b-versatile', // Recomendado: equilibrio velocidad/calidad
-      temperature: 0.7, // Creatividad media
-      maxTokens: 512, // Limita respuestas largas
-    ),
-  );
-  return GroqService(groq);
-});
 
 class GroqService {
-  final Groq _groq;
+  late final Groq _groq;
 
-  GroqService(this._groq) {
-    _groq
-        .startChat(); // Inicia la sesión persistente (mantiene contexto de conversación)
+  GroqService() {
+    final config = Configuration(
+      model: 'llama3-8b-8192', // o tu modelo preferido, checa docs de Groq
+      temperature: 0.7,
+      maxTokens: 1024, // si quieres limitar
+    );
+
+    _groq = Groq(
+      apiKey: const String.fromEnvironment('GROQ_API_KEY'),
+      configuration: config, // ← Fix missing_required_argument
+    );
+
+    _groq.startChat(); // Inicializa sesión
   }
 
-  /// Obtiene una respuesta completa (no streaming)
   Future<String> getResponse(String prompt) async {
     try {
       final response = await _groq.sendMessage(prompt);
-      final content = response.choices.first.message.content;
-      return content ?? 'No hay respuesta de Groq';
+      return response.choices.first.message.content ??
+          'No response'; // Fix dead_null_aware (lado izquierdo no null real)
     } on GroqException catch (e) {
-      print('GroqException: ${e.message} - Status: ${e.status}');
-      return 'Error con Groq: ${e.message}';
+      // Evita print en prod → usa logger o return error
+      // print('Groq error: ${e.message}');  // comenta o quita
+      return 'Error: ${e.message}';
     } catch (e) {
-      print('Error inesperado en Groq: $e');
-      return 'Error inesperado con Groq: $e';
+      return 'Unexpected error: $e';
     }
   }
 
-  /// Streaming: respuesta progresiva (ideal para animar al oso hablando letra por letra)
-  Stream<String> streamResponse(String prompt) async* {
-    try {
-      await for (final chunk in _groq.streamChat(prompt)) {
-        final content = chunk.choices.first.delta.content;
-        if (content != null && content.isNotEmpty) {
-          yield content;
-        }
-      }
-    } on GroqException catch (e) {
-      yield 'Error en streaming: ${e.message}';
-    } catch (e) {
-      yield 'Error inesperado en streaming: $e';
-    }
+  // Streaming: no soportado nativo → throw o implementa con http si necesitas
+  Stream<String> streamResponse(String prompt) {
+    throw UnimplementedError(
+        'Groq paquete no soporta streaming nativo. Usa HTTP directo.');
   }
 }
