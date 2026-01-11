@@ -24,7 +24,7 @@ class XaiService {
               'grok-beta'), // o el modelo actual de xAI (grok-beta o grok-2 según disponibilidad)
           messages: [
             // System prompt - wrapper .text()
-            ChatCompletionMessage.developer(
+            const ChatCompletionMessage.developer(
               content: ChatCompletionDeveloperMessageContent.text(
                 'Eres un oso polar muy divertido, sarcástico, ingenioso y amigable con niños. Responde de forma corta, creativa y con humor.',
               ),

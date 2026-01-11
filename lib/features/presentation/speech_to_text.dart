@@ -4,7 +4,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import 'package:interacting_tom/features/providers/animation_state_controller.dart';
-import 'package:interacting_tom/features/providers/AIResponseController.dart'; // Asegúrate de que el path sea correcto
+import 'package:interacting_tom/features/providers/ai_response_controller.dart'; // Asegúrate de que el path sea correcto
 
 class SpeechToTextWidget extends ConsumerStatefulWidget {
   const SpeechToTextWidget({super.key, this.child});

@@ -4,20 +4,20 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:interacting_tom/features/data/groq_service.dart';
 import 'package:interacting_tom/features/data/xai_service.dart';
 
-// ¡IMPORTANTE! Esta línea debe estar exactamente así
-part 'AIResponseController.g.dart';
+// Esta línea es OBLIGATORIA para generar el .g.dart
+part 'ai_response_controller.g.dart';
 
 enum AiProvider { groq, xai }
 
-// Provider para seleccionar qué IA usar (Groq o xAI)
+// Provider para elegir IA (Groq o xAI)
 final selectedAiProvider = StateProvider<AiProvider>((ref) => AiProvider.groq);
 
-// Providers para los servicios (instancias singleton)
+// Providers para servicios
 final groqServiceProvider = Provider<GroqService>((ref) => GroqService());
 
 final xaiServiceProvider = Provider<XaiService>((ref) => XaiService());
 
-@Riverpod(keepAlive: true)
+@riverpod
 class AiResponseController extends _$AiResponseController {
   @override
   AsyncValue<String?> build() {
@@ -43,34 +43,11 @@ class AiResponseController extends _$AiResponseController {
     }
   }
 
-  void streamResponse(String prompt) {
-    state = const AsyncLoading();
-
-    final provider = ref.read(selectedAiProvider);
-    Stream<String> stream;
-
-    if (provider == AiProvider.groq) {
-      stream = ref.read(groqServiceProvider).streamResponse(prompt);
-    } else {
-      stream = ref.read(xaiServiceProvider).streamResponse(prompt);
-    }
-
-    stream.listen(
-      (chunk) {
-        final current = state.value ?? '';
-        state = AsyncData(current + chunk);
-      },
-      onError: (e, stack) {
-        state = AsyncError(e, stack);
-      },
-    );
-  }
-
   void clearResponse() {
     state = const AsyncData(null);
   }
 
-  // Método de compatibilidad (para speech_to_text)
+  // Para compatibilidad con speech_to_text
   Future<void> generateResponse(String text) async {
     await getResponse(text);
   }

@@ -24,7 +24,7 @@ class GroqService {
               'llama-3.1-70b-versatile'), // Modelo rápido y bueno de Groq (puedes cambiarlo)
           messages: [
             // System prompt - sin 'const' + wrapper .text()
-            ChatCompletionMessage.developer(
+            const ChatCompletionMessage.developer(
               content: ChatCompletionDeveloperMessageContent.text(
                 'Eres un oso polar simpático, juguetón y educativo que habla con niños. Responde corto, divertido y amigable.',
               ),
